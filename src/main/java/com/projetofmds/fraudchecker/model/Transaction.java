@@ -13,6 +13,7 @@ import com.projetofmds.fraudchecker.model.enums.TransactionType;
 @Entity
 @Table(name = "Transactions")
 @Getter @Setter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -45,14 +46,5 @@ public class Transaction {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TransactionStatus status;
-
-    @PrePersist
-    protected void  onCreate() {
-        this.timestamp = LocalDateTime.now();
-        if(this.status == null) {
-            this.status = TransactionStatus.PENDING;
-        }
-    }
-
 
 }

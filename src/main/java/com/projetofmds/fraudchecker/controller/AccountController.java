@@ -17,14 +17,14 @@ public class AccountController {
 
     private final AccountService accountService;
 
-    // 1. Endpoint para criar uma conta
+   
     @PostMapping
     public ResponseEntity<Account> createAccount(@RequestBody Account account) {
         Account savedAccount = accountService.createAccount(account);
         return new ResponseEntity<>(savedAccount, HttpStatus.CREATED);
     }
 
-    // 2. Endpoint para listar todas as contas
+    
     @GetMapping
     public List<Account> getAllAccounts() {
         return accountService.getAllAccounts();
