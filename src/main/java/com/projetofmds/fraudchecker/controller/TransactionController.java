@@ -37,7 +37,7 @@ public class TransactionController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @GetMapping("/account/{accountId}") // Ajustamos para buscar por conta
+    @GetMapping("/account/{accountId}") 
     public ResponseEntity<List<Transaction>> getHistory(@PathVariable Long accountId) {
         List<Transaction> history = transactionService.getAccountHistory(accountId);
         return ResponseEntity.ok(history);
