@@ -24,7 +24,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@Slf4j // [cite: 218] Ativa o objeto 'log' automaticamente via Lombok
 public class TransactionService {
 
     private final TransactionRepository transactionRepository;
@@ -34,8 +34,13 @@ public class TransactionService {
 
     @Transactional
     public Transaction processTransaction(TransactionRequestDTO request) {
+        log.info("Recebendo nova transação para a conta: {}", request.accountId()); // 
+
         Account account = accountRepository.findById(request.accountId())
-                .orElseThrow(() -> new RuntimeException("Conta não encontrada!"));
+                .orElseThrow(() -> {
+                    log.error("Falha ao processar: Conta {} não encontrada!", request.accountId());
+                    return new RuntimeException("Conta não encontrada!");
+                });
 
         Transaction transaction = Transaction.builder()
             .amount(request.amount())
@@ -47,6 +52,7 @@ public class TransactionService {
             .build();
 
         Transaction saved = transactionRepository.save(transaction);
+        log.info("Transação {} salva com status PENDING. Disparando evento assíncrono...", saved.getId());
 
         eventPublisher.publishEvent(new TransactionEventDTO(
             saved.getId(), 
@@ -59,44 +65,48 @@ public class TransactionService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void analyzeRisk(TransactionEventDTO event) {
+        //cite:316,317
+        log.info("🔍 [ASSÍNCRONO] Iniciando análise de risco para Transação ID: {}", event.transactionId());
+
         Transaction transaction = transactionRepository.findById(event.transactionId())
-                .orElseThrow(() -> new RuntimeException("Transação não encontrada no processamento posterior"));
+                .orElseThrow(() -> {
+                    log.error("Erro crítico: Transação {} sumiu do banco!", event.transactionId());
+                    return new RuntimeException("Transação não encontrada no processamento posterior");
+                });
         
         Account account = transaction.getAccount();
-
-        // --- STRATEGY PATTERN + APRENDIZADO ---
-        // Risco que a conta já tinha
         BigDecimal totalRisk = account.getBaseRiskScore();
 
-        // Soma dos risco das regras desta transação específica
+        // --- STRATEGY PATTERN ---
         for (RiskRuleChecker rule : riskRules) {
-            totalRisk = totalRisk.add(rule.check(transaction));
+            BigDecimal ruleScore = rule.check(transaction);
+            totalRisk = totalRisk.add(ruleScore);
         }
         
-        // Atualizacao do score na transação para auditoria
         transaction.setBaseRiskScore(totalRisk);
 
-        // Decisão final baseada no score ACUMULADO
+        // Decisão final baseada no score ACUMULADO ou valor exorbitante [cite: 301, 302]
         if (totalRisk.compareTo(new BigDecimal("100")) > 0 || 
             transaction.getAmount().compareTo(new BigDecimal("10000")) > 0) {
             transaction.setStatus(TransactionStatus.REJECTED);
+            log.warn("🚨 Transação {} REJEITADA. Score: {} | Valor: {}", 
+                     transaction.getId(), totalRisk, transaction.getAmount());
         } else {
             transaction.setStatus(TransactionStatus.APPROVED);
+            log.info("✅ Transação {} APROVADA. Score: {}", transaction.getId(), totalRisk);
         }
 
         // --- APRENDIZADO ---
-        // Atualizacao do score da CONTA para que a próxima transação já herde esse risco
         account.setBaseRiskScore(totalRisk);
-        accountRepository.save(account); // <--- Salvando a "memória" da conta
+        accountRepository.save(account); 
         
-        // Atualiza a transação no banco
         transactionRepository.save(transaction);
-        
-        log.info("📈 [APRENDIZADO] Novo Score da Conta " + account.getId() + ": " + totalRisk);
-        log.info("⚡ [ASSÍNCRONO] Transação " + transaction.getId() + " finalizada como: " + transaction.getStatus());
+        //cite: 314,315
+        log.info("📈 [APRENDIZADO] Novo Score da Conta {}: {}", account.getId(), totalRisk);
     }
 
     public List<Transaction> getAccountHistory(Long accountId) {
+        log.debug("Buscando histórico para conta: {}", accountId);
         return transactionRepository.findByAccountId(accountId);
     }
 }

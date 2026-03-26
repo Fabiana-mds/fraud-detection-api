@@ -3,6 +3,7 @@ package com.projetofmds.fraudchecker.listener;
 import com.projetofmds.fraudchecker.dto.TransactionEventDTO;
 import com.projetofmds.fraudchecker.service.TransactionService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class TransactionListener {
 
     private final TransactionService transactionService;
@@ -23,7 +25,7 @@ public class TransactionListener {
             try {
             transactionService.analyzeRisk(event);
         } catch (Exception e) {
-            System.err.println("❌ ERRO NO ASYNC: " + e.getMessage());
+            log.error("❌ ERRO NO ASYNC: " + e.getMessage());
             e.printStackTrace();
     }    }
 }

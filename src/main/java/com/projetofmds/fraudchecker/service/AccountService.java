@@ -1,40 +1,74 @@
 package com.projetofmds.fraudchecker.service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.projetofmds.fraudchecker.dto.RiskProfileDTO;
 import com.projetofmds.fraudchecker.model.Account;
+import com.projetofmds.fraudchecker.model.Transaction;
 import com.projetofmds.fraudchecker.repository.AccountRepository;
+
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Service responsável pela gestão das contas dos clientes.
- * Concentra as regras de negócio relacionadas ao ciclo de vida de uma Account.
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j 
 public class AccountService {
 
     private final AccountRepository accountRepository;
 
-    /**
-     * Registra uma nova conta no sistema.
-     * @param account Objeto contendo os dados da conta a ser persistida.
-     * @return A conta salva com seu respectivo ID gerado.
-     */
     @Transactional
     public Account createAccount(Account account) {
-        // Camada preparada para futuras validações de negócio 
-        // (Ex: verificar se o número da conta já existe ou validar CPF/CNPJ)
+        log.info("Salvando nova conta para o cliente: {}", account.getCostumerName());
         return accountRepository.save(account);
     }
 
-    /**
-     * Recupera a listagem completa de contas cadastradas.
-     * @return Lista contendo todos os registros de contas do banco de dados.
-     */
     @Transactional(readOnly = true)
     public List<Account> getAllAccounts() {
         return accountRepository.findAll();
+    }
+
+    /**
+     * Calcula o perfil de risco de uma conta.
+     */
+    @Transactional(readOnly = true)
+    public RiskProfileDTO getRiskProfile(Long id) {
+        Account account = accountRepository.findById(id)
+                .orElseThrow(() -> {
+                    log.error("Conta ID {} não encontrada para perfil de risco", id);
+                    return new RuntimeException("Conta não encontrada");
+                });
+
+        List<Transaction> transactions = account.getTransaction();
+        int total = (transactions != null) ? transactions.size() : 0;
+        
+        // Cálculo da média de valores usando BigDecimal puro para evitar erros de tipo
+        BigDecimal average = total == 0 ? BigDecimal.ZERO : 
+            transactions.stream()
+                .map(Transaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(BigDecimal.valueOf(total), 2, RoundingMode.HALF_UP);
+
+        // Lógica de status de risco
+        String status = account.getBaseRiskScore().compareTo(new BigDecimal("100")) > 0 ? "HIGH" : "NORMAL";
+
+        log.info("Perfil de risco gerado para conta {}: Status {}", id, status);
+
+        return new RiskProfileDTO(
+            account.getId(),
+            account.getCostumerName(),
+            account.getBaseRiskScore(),
+            average,
+            (long) total,
+            status
+        );
     }
 }
